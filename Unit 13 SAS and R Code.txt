@@ -1,0 +1,321 @@
+############
+############
+###R Code###
+############
+############
+
+##Echolocation Data
+
+library(Sleuth2)
+
+energy <- case1002
+str(energy)
+head(energy)
+
+plot(Energy ~ Mass, energy, log="xy", xlab = "Body Mass (g) (log scale)",
+ylab = "Energy Expenditure (W) (log scale)",
+pch = ifelse(Type=="echolocating bats", 19,
+ifelse(Type=="non-echolocating birds", 21, 24)))
+legend(7, 50, pch=c(24, 21, 19),
+c("Non-echolocating bats", "Non-echolocating birds","Echolocating bats"))
+
+energy$logEnergy <- log(energy$Energy)
+energy$logMass <- log(energy$Mass)
+energy.lm <- lm(logEnergy ~ logMass + Type, data=energy)
+
+##Option 1: change the reference level
+energy$Type <- relevel(energy$Type, ref='echolocating bats')
+energy.lm2 <- lm(logEnergy ~ logMass + Type, data=energy)
+summary(energy.lm2)
+confint(energy.lm2)
+
+##Option 2: variance-covariance matrix
+##You need to pull the individual numbers, but here is the command to
+##actually see the matrix
+vcov(energy.lm)
+
+************;
+************;
+**SAS Code**;
+************;
+************;
+
+
+**Bluefinn Data;
+
+data bluefin;
+input age      length1;
+datalines;
+1      67
+1      62
+2      109
+2      83
+2      91
+2      88
+3      137
+3      131
+3      122
+3      122
+3      118
+3      115
+3      131
+3      143
+3      142
+2      123
+3      122
+4      138
+4      135
+4      146
+4      146
+4      145
+4      145
+4      144
+4      140
+4      150
+4      152
+4      157
+4      155
+4      153
+4      154
+4      158
+4      162
+4      161
+4      162
+4      165
+4      171
+5      171
+4      162
+4      169
+4      167
+5      188
+2      100
+2      109
+4      150
+3      140
+4      170
+3      150
+4      140
+4      140
+4      150
+4      150
+3      140
+3      150
+3      150
+4      150
+4      160
+3      140
+4      150
+5      170
+4      150
+5      150
+4      150
+4      150
+3      150
+5      150
+5      160
+4      140
+5      160
+3      130
+4      160
+3      130
+4      170
+6      170
+4      160
+5      180
+4      160
+4      170
+;
+run;
+
+proc reg data = bluefin;
+model length1 = age;
+run;
+
+data bluefin2;
+set bluefin;
+age2 = age**2;
+run;
+
+proc reg data = bluefin2;
+model length1 = age age2 / VIF;
+run;
+
+proc univariate data=bluefin; var age; run;
+**Mean = 3.62820513;
+
+data bluefin3;
+set bluefin;
+age_c = age-3.62820513;
+age_c2 = age_c**2;
+run;
+
+proc reg data = bluefin3;
+model length1 = age_c age_c2 / VIF;
+run;
+
+
+**Echolocation Data;
+
+data Bats;
+length Type $ 22;
+input Mass      Type $      Energy;
+datalines;
+779      non-echolocating_bats      43.7
+628      non-echolocating_bats      34.8
+258      non-echolocating_bats      23.3
+315      non-echolocating_bats      22.4
+24.3      non-echolocating_birds      2.46
+35      non-echolocating_birds      3.93
+72.8      non-echolocating_birds      9.15
+120      non-echolocating_birds      13.8
+213      non-echolocating_birds      14.6
+275      non-echolocating_birds      22.8
+370      non-echolocating_birds      26.2
+384      non-echolocating_birds      25.9
+442      non-echolocating_birds      29.5
+412      non-echolocating_birds      43.7
+330      non-echolocating_birds      34
+480      non-echolocating_birds      27.8
+93      echolocating_bats      8.83
+8      echolocating_bats      1.35
+6.7      echolocating_bats      1.12
+7.7      echolocating_bats      1.02
+;
+
+data bats2; set bats;
+if Type='echolocating_bats' then ebat=1; else ebat=0;
+if Type='non-echolocating_birds' then bird=1; else bird=0;
+lmass=log(mass);
+lenergy=log(energy);
+run;
+
+proc reg data=bats2; 
+model lenergy = lmass bird ebat / covb;
+run;
+
+data bats3; set bats;
+if Type='non-echolocating_bats' then nebat=1; else nebat=0;
+if Type='non-echolocating_birds' then bird=1; else bird=0;
+lmass=log(mass);
+lenergy=log(energy);
+run;  
+
+proc reg data=bats3; 
+model lenergy = lmass bird nebat / covb;
+run; 
+
+*Make prediction for new value;
+*Create new dataset with same variable names and unknown outcome;
+data bats_newpred;
+input Mass      Type $      Energy;
+datalines;
+200      non-echolocating_bats      .
+;
+run;
+
+data bats4;
+set bats_newpred bats;
+lmass=log(mass);
+lenergy=log(energy);
+run;
+
+*Use proc glm for point estimate and interval;
+proc glm data=bats4;
+class type;
+model lenergy = lmass type / solution clm;
+output out=regout(where=(Energy=.)) p=predicted ucl=UCL_Pred lcl=LCL_Pred;
+run;
+
+*Print only predicted value (useful for large datasets);
+proc print data=regout; run;
+
+
+**Police Data;
+
+data police_force;
+input population police violent_crime;
+datalines;
+10000  200  18
+10000  300  17
+10000  400  13
+10000  500  10
+10000  600  9
+10000  700  7
+50000  1000 90
+50000  1200 80
+50000  1350 70
+50000  1400 68
+100000 2000 200
+100000 3000 170
+100000 3100 165
+100000 3800 150
+100000 4000 145
+100000 5000 120
+300000 4000 590
+300000 4500 550
+300000 5000 510
+300000 5500 480
+300000 5600 477
+1000000 7000 2100
+1000000 8000 1800
+1000000 10000 1700
+1000000 13000 1500
+1000000 17000 1100
+;
+run;
+
+proc sgscatter data = police_force;
+matrix violent_crime police population / diagonal=(histogram);
+run;
+
+data lpolice_force;
+set police_force;
+lpolice = log(police);
+lpopulation = log(population);
+lviolent_crime = log(violent_crime);
+run;
+
+proc sgscatter data = lpolice_force;
+matrix lviolent_crime lpolice lpopulation / diagonal=(histogram);
+run;
+
+**What is weird about this?;
+proc glm data = lpolice_force plots = all;
+model lviolent_crime = lpolice;
+run;
+
+**That is because we are not accounting for the fact that as population of the city grows;
+**..so does the police force;
+**AND ... so does violent crime;
+**So, police force and population go up at the same time ... as does violent crime;
+**This means that the size of the police force is potenitally confounded with the population of the city;
+
+**Add population in the model;
+proc glm data = lpolice_force plots = all;
+model lviolent_crime = lpolice lpopulation;
+run;
+
+**Assumptions still have a problem ... a little curvature;
+**No problem .. add a squared term;
+proc glm data = lpolice_force plots = all;
+model lviolent_crime = lpolice lpopulation lpopulation*lpopulation / solution tolerance;
+run;
+
+**The tolerance values (look at Type 2) suggest high VIF values - try centering lpopulation;
+
+proc means data=lpolice_force;
+var lpopulation; run;
+
+data lpolice_force2; set lpolice_force;
+lpopulation_c = lpopulation-11.5289981;
+run;
+
+**This fixes the VIF problem for the quadratic term, but lpolice and lpopulation still have high VIFs;
+
+proc glm data = lpolice_force2 plots = all;
+model lviolent_crime = lpolice lpopulation_c lpopulation_c*lpopulation_c / solution tolerance;
+run;
+
+**It turns out that centering lpolice doesn't fix the problem either;
+**What to do? You can try penalized regression (like ridge regression), weighted least squares, or some other more complex modeling approach;
+
